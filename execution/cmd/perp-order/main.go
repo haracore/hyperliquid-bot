@@ -2,18 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"hyperliquid-bot/sdk/constants"
-	"hyperliquid-bot/sdk/exchange"
-	hlinfo "hyperliquid-bot/sdk/info"
-	"hyperliquid-bot/sdk/signing"
-	"hyperliquid-bot/sdk/types"
+	execution "hyperliquid-bot/execution/client"
+	"hyperliquid-bot/execution/internal/clientutil"
 )
 
 func main() {
@@ -35,30 +31,20 @@ func main() {
 	)
 	flag.Parse()
 
-	if strings.TrimSpace(*privateKey) == "" {
-		exitUsage("missing private key: pass -private-key or set HYPERLIQUID_PRIVATE_KEY")
-	}
-	if strings.TrimSpace(*coin) == "" {
-		exitUsage("missing -coin")
-	}
+	clientutil.RequirePrivateKey(*privateKey)
+	clientutil.RequireCoin(*coin)
 	if *size <= 0 {
-		exitUsage("-size must be greater than 0")
+		clientutil.ExitUsage("-size must be greater than 0")
 	}
 	if *price <= 0 {
-		exitUsage("-price must be greater than 0")
+		clientutil.ExitUsage("-price must be greater than 0")
 	}
-	isBuy, err := parseSide(*side)
+	isBuy, err := clientutil.ParseSide(*side)
 	if err != nil {
-		exitUsage(err.Error())
+		clientutil.ExitUsage(err.Error())
 	}
-	if !validTIF(*tif) {
-		exitUsage("-tif must be one of Gtc, Ioc, Alo")
-	}
-	if *baseURL == "" {
-		*baseURL = constants.MainnetAPIURL
-	}
-	if *testnet {
-		*baseURL = constants.TestnetAPIURL
+	if !clientutil.ValidTIF(*tif) {
+		clientutil.ExitUsage("-tif must be one of Gtc, Ioc, Alo")
 	}
 	if !*confirm {
 		fmt.Fprintln(os.Stderr, "refusing to submit without -confirm")
@@ -66,91 +52,37 @@ func main() {
 		os.Exit(2)
 	}
 
-	wallet, err := signing.PrivateKeyFromHex(*privateKey)
-	if err != nil {
-		exitErr("private key", err)
-	}
-
-	var cloid *types.Cloid
+	var cloid *execution.Cloid
 	if strings.TrimSpace(*cloidRaw) != "" {
-		parsed, err := types.NewCloid(*cloidRaw)
+		parsed, err := execution.NewCloid(*cloidRaw)
 		if err != nil {
-			exitErr("cloid", err)
+			clientutil.ExitErr("cloid", err)
 		}
 		cloid = &parsed
 	}
 
-	var vault *string
-	if strings.TrimSpace(*vaultAddress) != "" {
-		vault = vaultAddress
-	}
-
+	base := clientutil.ResolveBaseURL(*baseURL, *testnet)
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	perpDexs := []string{""}
-	if strings.TrimSpace(*dex) != "" {
-		perpDexs = []string{*dex}
-	}
-	info, err := hlinfo.NewInitialized(ctx, *baseURL, true, nil, nil, perpDexs, *timeout)
+	client := execution.New(execution.Config{
+		BaseURL:      base,
+		Timeout:      *timeout,
+		PrivateKey:   *privateKey,
+		Dex:          *dex,
+		VaultAddress: clientutil.OptionalString(vaultAddress),
+	})
+	response, err := client.PlacePerpOrder(ctx, execution.OrderRequest{
+		Coin:       *coin,
+		IsBuy:      isBuy,
+		Size:       *size,
+		Price:      *price,
+		TIF:        *tif,
+		ReduceOnly: *reduceOnly,
+		Cloid:      cloid,
+	})
 	if err != nil {
-		exitErr("initialize info metadata", err)
+		clientutil.ExitErr("place perp order", err)
 	}
-
-	ex := exchange.New(wallet, *baseURL, *timeout, vault, nil)
-	ex.Info = info
-
-	var response any
-	err = ex.Order(
-		ctx,
-		*coin,
-		isBuy,
-		*size,
-		*price,
-		signing.OrderType{"limit": map[string]any{"tif": *tif}},
-		*reduceOnly,
-		cloid,
-		nil,
-		&response,
-	)
-	if err != nil {
-		exitErr("place perp order", err)
-	}
-
-	pretty, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		exitErr("format response", err)
-	}
-	fmt.Println(string(pretty))
-}
-
-func parseSide(side string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(side)) {
-	case "buy", "b":
-		return true, nil
-	case "sell", "s":
-		return false, nil
-	default:
-		return false, fmt.Errorf("-side must be buy or sell")
-	}
-}
-
-func validTIF(tif string) bool {
-	switch tif {
-	case "Gtc", "Ioc", "Alo":
-		return true
-	default:
-		return false
-	}
-}
-
-func exitUsage(message string) {
-	fmt.Fprintln(os.Stderr, message)
-	flag.Usage()
-	os.Exit(2)
-}
-
-func exitErr(label string, err error) {
-	fmt.Fprintf(os.Stderr, "%s: %v\n", label, err)
-	os.Exit(1)
+	clientutil.PrintJSON(response)
 }

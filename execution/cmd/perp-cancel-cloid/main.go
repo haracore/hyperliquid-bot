@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	execution "hyperliquid-bot/execution/client"
 	"hyperliquid-bot/execution/internal/clientutil"
 )
 
@@ -32,13 +33,22 @@ func main() {
 		fmt.Fprintln(os.Stderr, "refusing to cancel without -confirm")
 		os.Exit(2)
 	}
-	cloid := clientutil.ParseCloid(*cloidRaw, "cloid")
+	cloid, err := execution.NewCloid(*cloidRaw)
+	if err != nil {
+		clientutil.ExitErr("cloid", err)
+	}
 	base := clientutil.ResolveBaseURL(*baseURL, *testnet)
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	ex := clientutil.NewExchange(ctx, *privateKey, base, *dex, clientutil.OptionalString(vaultAddress), *timeout)
-	var response any
-	if err := ex.CancelByCloid(ctx, *coin, cloid, &response); err != nil {
+	client := execution.New(execution.Config{
+		BaseURL:      base,
+		Timeout:      *timeout,
+		PrivateKey:   *privateKey,
+		Dex:          *dex,
+		VaultAddress: clientutil.OptionalString(vaultAddress),
+	})
+	response, err := client.CancelPerpByCloid(ctx, execution.CancelByCloidRequest{Coin: *coin, Cloid: cloid})
+	if err != nil {
 		clientutil.ExitErr("perp cancel by cloid", err)
 	}
 	clientutil.PrintJSON(response)

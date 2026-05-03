@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	execution "hyperliquid-bot/execution/client"
 	"hyperliquid-bot/execution/internal/clientutil"
-	hlinfo "hyperliquid-bot/sdk/info"
 )
 
 func main() {
@@ -23,9 +23,9 @@ func main() {
 	base := clientutil.ResolveBaseURL(*baseURL, *testnet)
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	info := hlinfo.New(base, *timeout)
-	var response any
-	if err := info.OpenOrders(ctx, *address, *dex, &response); err != nil {
+	client := execution.New(execution.Config{BaseURL: base, Timeout: *timeout, Dex: *dex})
+	response, err := client.PerpOpenOrders(ctx, *address)
+	if err != nil {
 		clientutil.ExitErr("perp open orders", err)
 	}
 	clientutil.PrintJSON(response)

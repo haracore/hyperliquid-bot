@@ -1,19 +1,13 @@
 package clientutil
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"hyperliquid-bot/sdk/constants"
-	"hyperliquid-bot/sdk/exchange"
-	hlinfo "hyperliquid-bot/sdk/info"
-	"hyperliquid-bot/sdk/signing"
-	"hyperliquid-bot/sdk/types"
 )
 
 func ResolveBaseURL(baseURL string, testnet bool) string {
@@ -88,43 +82,4 @@ func PrintJSON(value any) {
 		ExitErr("format response", err)
 	}
 	fmt.Println(string(pretty))
-}
-
-func InitializedInfo(ctx context.Context, baseURL string, dex string, timeout time.Duration) *hlinfo.Info {
-	perpDexs := []string{""}
-	if strings.TrimSpace(dex) != "" {
-		perpDexs = []string{dex}
-	}
-	info, err := hlinfo.NewInitialized(ctx, baseURL, true, nil, nil, perpDexs, timeout)
-	if err != nil {
-		ExitErr("initialize info metadata", err)
-	}
-	return info
-}
-
-func NewExchange(ctx context.Context, privateKey string, baseURL string, dex string, vaultAddress *string, timeout time.Duration) *exchange.Exchange {
-	wallet, err := signing.PrivateKeyFromHex(privateKey)
-	if err != nil {
-		ExitErr("private key", err)
-	}
-	info := InitializedInfo(ctx, baseURL, dex, timeout)
-	ex := exchange.New(wallet, baseURL, timeout, vaultAddress, nil)
-	ex.Info = info
-	return ex
-}
-
-func ParseCloid(raw string, label string) types.Cloid {
-	cloid, err := types.NewCloid(raw)
-	if err != nil {
-		ExitErr(label, err)
-	}
-	return cloid
-}
-
-func ParseOrderID(oid int, cloidRaw string) exchange.OidOrCloid {
-	if strings.TrimSpace(cloidRaw) != "" {
-		cloid := ParseCloid(cloidRaw, "order cloid")
-		return cloid
-	}
-	return oid
 }

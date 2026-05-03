@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"hyperliquid-bot/sdk/constants"
-	hlinfo "hyperliquid-bot/sdk/info"
+	execution "hyperliquid-bot/execution/client"
+	"hyperliquid-bot/execution/internal/clientutil"
 )
 
 func main() {
@@ -22,43 +22,25 @@ func main() {
 	)
 	flag.Parse()
 
-	if strings.TrimSpace(*address) == "" {
-		fmt.Fprintln(os.Stderr, "missing address: pass -address or set HYPERLIQUID_ADDRESS")
-		os.Exit(2)
-	}
-	if *baseURL == "" {
-		*baseURL = constants.MainnetAPIURL
-	}
-	if *testnet {
-		*baseURL = constants.TestnetAPIURL
-	}
+	clientutil.RequireAddress(*address)
+	base := clientutil.ResolveBaseURL(*baseURL, *testnet)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	info := hlinfo.New(*baseURL, *timeout)
-
-	var perpState map[string]any
-	if err := info.UserState(ctx, *address, "", &perpState); err != nil {
-		exitErr("perp state", err)
-	}
-	var spotState map[string]any
-	if err := info.SpotUserState(ctx, *address, &spotState); err != nil {
-		exitErr("spot state", err)
+	client := execution.New(execution.Config{BaseURL: base, Timeout: *timeout})
+	result, err := client.Balances(ctx, *address)
+	if err != nil {
+		clientutil.ExitErr("balances", err)
 	}
 
 	printHeader("Hyperliquid balances")
 	fmt.Printf("Address: %s\n", *address)
-	fmt.Printf("API:     %s\n", *baseURL)
+	fmt.Printf("API:     %s\n", base)
 
-	printPerpSummary(perpState)
-	printSpotBalances(spotState)
-	printPerpPositions(perpState)
-}
-
-func exitErr(label string, err error) {
-	fmt.Fprintf(os.Stderr, "%s: %v\n", label, err)
-	os.Exit(1)
+	printPerpSummary(result.PerpState)
+	printSpotBalances(result.SpotState)
+	printPerpPositions(result.PerpState)
 }
 
 func printHeader(title string) {
@@ -119,38 +101,21 @@ func printPerpPositions(state map[string]any) {
 	fmt.Println("Perp positions")
 	fmt.Println("--------------")
 
-	positions, ok := state["assetPositions"].([]any)
-	if !ok || len(positions) == 0 {
+	positions := execution.ExtractPerpPositions(state, false)
+	if len(positions) == 0 {
 		fmt.Println("(none)")
 		return
 	}
 
-	printed := false
-	for _, raw := range positions {
-		wrapper, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		position, ok := wrapper["position"].(map[string]any)
-		if !ok {
-			continue
-		}
-		szi := fmt.Sprint(position["szi"])
-		if szi == "0" || szi == "0.0" {
-			continue
-		}
-		printed = true
+	for _, position := range positions {
 		fmt.Printf(
 			"%-12s szi=%s value=%s unrealizedPnl=%s marginUsed=%s\n",
-			position["coin"],
-			position["szi"],
-			position["positionValue"],
-			position["unrealizedPnl"],
-			position["marginUsed"],
+			position.Coin,
+			position.Szi,
+			position.PositionValue,
+			position.UnrealizedPnl,
+			position.MarginUsed,
 		)
-	}
-	if !printed {
-		fmt.Println("(none)")
 	}
 }
 

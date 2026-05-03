@@ -13,9 +13,17 @@ Future work for the execution agent should happen here unless the user explicitl
 
 ```text
 execution/
-├── cmd/                 # User-facing CLI commands
+├── client/              # Reusable execution package for bots and agents
+├── cmd/                 # Thin user-facing CLI wrappers around client/
 └── internal/clientutil/ # Shared helpers for execution commands
 ```
+
+`client/` is the Go package to use from bot code. It owns the calls into
+`sdk/` for balances, positions, open orders, order placement, cancel, and
+modify operations.
+
+`cmd/` is only for manual runs and smoke checks. Commands parse flags, build
+`client` requests, and print responses.
 
 ## Commands
 

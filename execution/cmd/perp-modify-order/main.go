@@ -7,9 +7,8 @@ import (
 	"os"
 	"time"
 
+	execution "hyperliquid-bot/execution/client"
 	"hyperliquid-bot/execution/internal/clientutil"
-	"hyperliquid-bot/sdk/signing"
-	"hyperliquid-bot/sdk/types"
 )
 
 func main() {
@@ -58,18 +57,38 @@ func runModify(privateKey string, baseURL string, testnet bool, coin string, dex
 		fmt.Fprintln(os.Stderr, "refusing to modify without -confirm")
 		os.Exit(2)
 	}
-	orderID := clientutil.ParseOrderID(oid, oidCloidRaw)
-	var newCloid *types.Cloid
+	orderID, err := execution.ParseOrderID(oid, oidCloidRaw)
+	if err != nil {
+		clientutil.ExitErr("order cloid", err)
+	}
+	var newCloid *execution.Cloid
 	if newCloidRaw != "" {
-		parsed := clientutil.ParseCloid(newCloidRaw, "new cloid")
+		parsed, err := execution.NewCloid(newCloidRaw)
+		if err != nil {
+			clientutil.ExitErr("new cloid", err)
+		}
 		newCloid = &parsed
 	}
 	base := clientutil.ResolveBaseURL(baseURL, testnet)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	ex := clientutil.NewExchange(ctx, privateKey, base, dex, vault, timeout)
-	var response any
-	err = ex.ModifyOrder(ctx, orderID, coin, isBuy, size, price, signing.OrderType{"limit": map[string]any{"tif": tif}}, reduceOnly, newCloid, &response)
+	client := execution.New(execution.Config{
+		BaseURL:      base,
+		Timeout:      timeout,
+		PrivateKey:   privateKey,
+		Dex:          dex,
+		VaultAddress: vault,
+	})
+	response, err := client.ModifyPerpOrder(ctx, execution.ModifyOrderRequest{
+		OrderID:    orderID,
+		Coin:       coin,
+		IsBuy:      isBuy,
+		Size:       size,
+		Price:      price,
+		TIF:        tif,
+		ReduceOnly: reduceOnly,
+		Cloid:      newCloid,
+	})
 	if err != nil {
 		clientutil.ExitErr("perp modify order", err)
 	}

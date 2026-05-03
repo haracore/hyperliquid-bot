@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	execution "hyperliquid-bot/execution/client"
 	"hyperliquid-bot/execution/internal/clientutil"
 )
 
@@ -35,9 +36,15 @@ func main() {
 	base := clientutil.ResolveBaseURL(*baseURL, *testnet)
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	ex := clientutil.NewExchange(ctx, *privateKey, base, *dex, clientutil.OptionalString(vaultAddress), *timeout)
-	var response any
-	if err := ex.Cancel(ctx, *coin, *oid, &response); err != nil {
+	client := execution.New(execution.Config{
+		BaseURL:      base,
+		Timeout:      *timeout,
+		PrivateKey:   *privateKey,
+		Dex:          *dex,
+		VaultAddress: clientutil.OptionalString(vaultAddress),
+	})
+	response, err := client.CancelPerpOrder(ctx, execution.CancelOrderRequest{Coin: *coin, Oid: *oid})
+	if err != nil {
 		clientutil.ExitErr("perp cancel order", err)
 	}
 	clientutil.PrintJSON(response)
