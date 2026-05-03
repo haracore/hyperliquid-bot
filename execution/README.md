@@ -50,17 +50,44 @@ accounts/main.vault_address -> HYPERLIQUID_VAULT_ADDRESS
 Common secret flags:
 
 ```bash
--secret-provider env|vault
+-secret-provider env|vault|vault-userpass
 -account main
 -secret-prefix accounts
 -vault-addr http://127.0.0.1:8200
 -vault-token ...
 -vault-mount secret
 -vault-prefix hyperliquid
+-vault-username trader
+-vault-password ...
+-vault-mfa method_id:123456
+-vault-mfa-method method_id
+-vault-otp 123456
+-vault-auth-mount userpass
 ```
 
 Explicit command flags such as `-address`, `-private-key`, and
 `-vault-address` override values resolved from secrets.
+
+`vault` is the token-based mode and reads with `VAULT_TOKEN` or
+`-vault-token`.
+
+`vault-userpass` logs in through Vault userpass first, optionally passing
+Login MFA via `-vault-mfa` or `-vault-mfa-method` plus `-vault-otp`, then reads
+the KV v2 secret with the issued client token:
+
+```bash
+go run ./execution/cmd/perp-order \
+  -secret-provider vault-userpass \
+  -vault-addr http://127.0.0.1:8200 \
+  -vault-username trader \
+  -vault-password '...' \
+  -vault-mfa-method totp-main \
+  -vault-otp 123456 \
+  -vault-mount secret \
+  -vault-prefix hyperliquid \
+  -account main \
+  -testnet -coin BTC -side buy -size 0.001 -price 25000 -confirm
+```
 
 ## Commands
 

@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	ProviderEnv   = "env"
-	ProviderVault = "vault"
+	ProviderEnv           = "env"
+	ProviderVault         = "vault"
+	ProviderVaultUserpass = "vault-userpass"
 )
 
 type ProviderConfig struct {
@@ -22,6 +23,12 @@ type ProviderConfig struct {
 	VaultNamespace string
 	VaultMount     string
 	VaultPrefix    string
+	VaultUsername  string
+	VaultPassword  string
+	VaultMFA       string
+	VaultMFAMethod string
+	VaultOTP       string
+	VaultAuthMount string
 }
 
 type Account struct {
@@ -95,8 +102,27 @@ func NewProvider(config ProviderConfig) (rootsecrets.Provider, error) {
 			Mount:     defaultString(config.VaultMount, "secret"),
 			Prefix:    config.VaultPrefix,
 		}), nil
+	case ProviderVaultUserpass:
+		return rootsecrets.NewVaultUserpassProvider(
+			rootsecrets.VaultUserpassConfig{
+				Address:   config.VaultAddress,
+				Username:  config.VaultUsername,
+				Password:  config.VaultPassword,
+				MFA:       config.VaultMFA,
+				MFAMethod: config.VaultMFAMethod,
+				OTP:       config.VaultOTP,
+				Namespace: config.VaultNamespace,
+				Mount:     defaultString(config.VaultAuthMount, "userpass"),
+			},
+			rootsecrets.VaultConfig{
+				Address:   config.VaultAddress,
+				Namespace: config.VaultNamespace,
+				Mount:     defaultString(config.VaultMount, "secret"),
+				Prefix:    config.VaultPrefix,
+			},
+		), nil
 	default:
-		return nil, fmt.Errorf("secret provider must be env or vault")
+		return nil, fmt.Errorf("secret provider must be env, vault, or vault-userpass")
 	}
 }
 

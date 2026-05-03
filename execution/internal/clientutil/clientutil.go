@@ -96,11 +96,17 @@ type SecretFlags struct {
 	VaultNamespace *string
 	VaultMount     *string
 	VaultPrefix    *string
+	VaultUsername  *string
+	VaultPassword  *string
+	VaultMFA       *string
+	VaultMFAMethod *string
+	VaultOTP       *string
+	VaultAuthMount *string
 }
 
 func AddSecretFlags() SecretFlags {
 	return SecretFlags{
-		Provider:       flag.String("secret-provider", envDefault("HYPERLIQUID_SECRET_PROVIDER", credentials.ProviderEnv), "secret provider: env or vault"),
+		Provider:       flag.String("secret-provider", envDefault("HYPERLIQUID_SECRET_PROVIDER", credentials.ProviderEnv), "secret provider: env, vault, or vault-userpass"),
 		Account:        flag.String("account", envDefault("HYPERLIQUID_ACCOUNT", "main"), "secret account name"),
 		Prefix:         flag.String("secret-prefix", envDefault("HYPERLIQUID_SECRET_PREFIX", "accounts"), "secret account path prefix"),
 		VaultAddress:   flag.String("vault-addr", os.Getenv("VAULT_ADDR"), "Vault address"),
@@ -108,6 +114,12 @@ func AddSecretFlags() SecretFlags {
 		VaultNamespace: flag.String("vault-namespace", os.Getenv("VAULT_NAMESPACE"), "Vault namespace"),
 		VaultMount:     flag.String("vault-mount", envDefault("VAULT_MOUNT", "secret"), "Vault KV v2 mount"),
 		VaultPrefix:    flag.String("vault-prefix", os.Getenv("VAULT_PREFIX"), "Vault path prefix"),
+		VaultUsername:  flag.String("vault-username", os.Getenv("VAULT_USERNAME"), "Vault userpass username"),
+		VaultPassword:  flag.String("vault-password", os.Getenv("VAULT_PASSWORD"), "Vault userpass password"),
+		VaultMFA:       flag.String("vault-mfa", os.Getenv("VAULT_MFA"), "Full Vault MFA header value, for example method_id:123456"),
+		VaultMFAMethod: flag.String("vault-mfa-method", os.Getenv("VAULT_MFA_METHOD"), "Vault MFA method ID/name used with -vault-otp"),
+		VaultOTP:       flag.String("vault-otp", os.Getenv("VAULT_OTP"), "Vault login MFA OTP used with -vault-mfa-method"),
+		VaultAuthMount: flag.String("vault-auth-mount", envDefault("VAULT_AUTH_MOUNT", "userpass"), "Vault userpass auth mount"),
 	}
 }
 
@@ -124,6 +136,12 @@ func ResolveAccount(ctx context.Context, flags SecretFlags, privateKeyOverride s
 		VaultNamespace: value(flags.VaultNamespace),
 		VaultMount:     value(flags.VaultMount),
 		VaultPrefix:    value(flags.VaultPrefix),
+		VaultUsername:  value(flags.VaultUsername),
+		VaultPassword:  value(flags.VaultPassword),
+		VaultMFA:       value(flags.VaultMFA),
+		VaultMFAMethod: value(flags.VaultMFAMethod),
+		VaultOTP:       value(flags.VaultOTP),
+		VaultAuthMount: value(flags.VaultAuthMount),
 	}
 	account, err := credentials.ResolveAccountFields(resolveCtx, config)
 	if err != nil {
@@ -147,6 +165,12 @@ func ResolveAccountFields(ctx context.Context, flags SecretFlags, privateKeyOver
 		VaultNamespace: value(flags.VaultNamespace),
 		VaultMount:     value(flags.VaultMount),
 		VaultPrefix:    value(flags.VaultPrefix),
+		VaultUsername:  value(flags.VaultUsername),
+		VaultPassword:  value(flags.VaultPassword),
+		VaultMFA:       value(flags.VaultMFA),
+		VaultMFAMethod: value(flags.VaultMFAMethod),
+		VaultOTP:       value(flags.VaultOTP),
+		VaultAuthMount: value(flags.VaultAuthMount),
 	})
 	if err != nil {
 		ExitErr("resolve execution secrets", err)
