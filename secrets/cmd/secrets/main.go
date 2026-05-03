@@ -16,10 +16,12 @@ import (
 const usage = `Usage:
   secrets get [flags]
   secrets account [flags]
+  secrets login-vault [flags]
 
 Commands:
-  get      Read a generic secret bundle
-  account  Read an account bundle via AccountResolver
+  get          Read a generic secret bundle
+  account      Read an account bundle via AccountResolver
+  login-vault  Login to Vault and print the issued client token
 
 Use "secrets <command> -h" for command-specific flags.
 `
@@ -61,6 +63,8 @@ func main() {
 		err = runGet(os.Args[2:])
 	case "account":
 		err = runAccount(os.Args[2:])
+	case "login-vault":
+		err = runLoginVault(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -82,12 +86,13 @@ func runGet(args []string) error {
 	timeout := fs.Duration("timeout", 10*time.Second, "provider timeout")
 	reveal := fs.Bool("reveal", false, "print sensitive fields without redaction")
 	fs.Var(&envFields, "env-field", "env mapping field=ENV_NAME; repeatable and used by env provider")
+	auth := addVaultUserpassFlags(fs)
 	addVaultFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	provider, err := buildProvider(*providerName, *secretPath, envFields)
+	provider, err := buildProvider(*providerName, *secretPath, envFields, auth.config())
 	if err != nil {
 		return err
 	}
@@ -114,13 +119,14 @@ func runAccount(args []string) error {
 	timeout := fs.Duration("timeout", 10*time.Second, "provider timeout")
 	reveal := fs.Bool("reveal", false, "print sensitive fields without redaction")
 	fs.Var(&envFields, "env-field", "env mapping field=ENV_NAME; repeatable and used by env provider")
+	auth := addVaultUserpassFlags(fs)
 	addVaultFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	secretPath := joinPath(*prefix, *account)
-	provider, err := buildProvider(*providerName, secretPath, envFields)
+	provider, err := buildProvider(*providerName, secretPath, envFields, auth.config())
 	if err != nil {
 		return err
 	}
@@ -145,7 +151,30 @@ func runAccount(args []string) error {
 	})
 }
 
-func buildProvider(providerName string, secretPath string, envFields repeatedFlags) (secrets.Provider, error) {
+func runLoginVault(args []string) error {
+	fs := flag.NewFlagSet("login-vault", flag.ExitOnError)
+	timeout := fs.Duration("timeout", 10*time.Second, "login timeout")
+	reveal := fs.Bool("reveal", false, "print the issued client token without redaction")
+	auth := addVaultUserpassFlags(fs)
+	addVaultFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+	token, err := secrets.NewVaultUserpassAuthenticator(auth.config()).Login(ctx)
+	if err != nil {
+		return err
+	}
+	if token.ClientToken != "" {
+		if !*reveal {
+			token.ClientToken = redact(token.ClientToken)
+		}
+	}
+	return printJSON(token)
+}
+
+func buildProvider(providerName string, secretPath string, envFields repeatedFlags, authConfig secrets.VaultUserpassConfig) (secrets.Provider, error) {
 	switch providerName {
 	case "env":
 		fields, err := parseEnvFields(envFields)
@@ -168,8 +197,15 @@ func buildProvider(providerName string, secretPath string, envFields repeatedFla
 			Mount:     envDefault("VAULT_MOUNT", "secret"),
 			Prefix:    os.Getenv("VAULT_PREFIX"),
 		}), nil
+	case "vault-userpass":
+		return secrets.NewVaultUserpassProvider(authConfig, secrets.VaultConfig{
+			Address:   os.Getenv("VAULT_ADDR"),
+			Namespace: os.Getenv("VAULT_NAMESPACE"),
+			Mount:     envDefault("VAULT_MOUNT", "secret"),
+			Prefix:    os.Getenv("VAULT_PREFIX"),
+		}), nil
 	default:
-		return nil, fmt.Errorf("-provider must be env or vault")
+		return nil, fmt.Errorf("-provider must be env, vault, or vault-userpass")
 	}
 }
 
@@ -189,6 +225,39 @@ func addVaultFlags(fs *flag.FlagSet) {
 	fs.Func("vault-prefix", "Vault path prefix; defaults to VAULT_PREFIX", func(value string) error {
 		return os.Setenv("VAULT_PREFIX", value)
 	})
+}
+
+type vaultUserpassFlags struct {
+	username *string
+	password *string
+	mfa      *string
+	method   *string
+	otp      *string
+	mount    *string
+}
+
+func addVaultUserpassFlags(fs *flag.FlagSet) vaultUserpassFlags {
+	return vaultUserpassFlags{
+		username: fs.String("vault-username", os.Getenv("VAULT_USERNAME"), "Vault userpass username; defaults to VAULT_USERNAME"),
+		password: fs.String("vault-password", os.Getenv("VAULT_PASSWORD"), "Vault userpass password; defaults to VAULT_PASSWORD"),
+		mfa:      fs.String("vault-mfa", os.Getenv("VAULT_MFA"), "Full Vault MFA header value, e.g. method_id:123456; defaults to VAULT_MFA"),
+		method:   fs.String("vault-mfa-method", os.Getenv("VAULT_MFA_METHOD"), "Vault MFA method ID/name used with -vault-otp"),
+		otp:      fs.String("vault-otp", os.Getenv("VAULT_OTP"), "Vault login MFA OTP used with -vault-mfa-method"),
+		mount:    fs.String("vault-auth-mount", envDefault("VAULT_AUTH_MOUNT", "userpass"), "Vault userpass auth mount"),
+	}
+}
+
+func (f vaultUserpassFlags) config() secrets.VaultUserpassConfig {
+	return secrets.VaultUserpassConfig{
+		Address:   os.Getenv("VAULT_ADDR"),
+		Username:  *f.username,
+		Password:  *f.password,
+		MFA:       *f.mfa,
+		MFAMethod: *f.method,
+		OTP:       *f.otp,
+		Namespace: os.Getenv("VAULT_NAMESPACE"),
+		Mount:     *f.mount,
+	}
 }
 
 func parseEnvFields(values []string) (secrets.EnvFields, error) {

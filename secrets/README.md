@@ -164,6 +164,67 @@ go run ./secrets/cmd/secrets account \
   -account main
 ```
 
+This is the old token-based mode. It keeps working as long as `VAULT_TOKEN`
+contains a token with read access.
+
+## Vault Userpass Login
+
+The CLI also supports login-based access. In this mode it logs in through
+Vault's `userpass` auth method, receives a short-lived client token, then reads
+the secret with that token:
+
+```bash
+export VAULT_ADDR=http://127.0.0.1:8200
+export VAULT_USERNAME=trader
+export VAULT_PASSWORD=...
+
+go run ./secrets/cmd/secrets account \
+  -provider vault-userpass \
+  -vault-mount secret \
+  -vault-prefix hyperliquid \
+  -account main
+```
+
+If Vault Login MFA is enforced on the userpass auth mount, provide the MFA value
+expected by Vault:
+
+```bash
+go run ./secrets/cmd/secrets account \
+  -provider vault-userpass \
+  -vault-username trader \
+  -vault-password '...' \
+  -vault-mfa 'totp-method-id-or-name:123456' \
+  -vault-prefix hyperliquid \
+  -account main
+```
+
+Or split method and one-time passcode:
+
+```bash
+go run ./secrets/cmd/secrets account \
+  -provider vault-userpass \
+  -vault-username trader \
+  -vault-password '...' \
+  -vault-mfa-method totp-method-id-or-name \
+  -vault-otp 123456 \
+  -vault-prefix hyperliquid \
+  -account main
+```
+
+You can also login only and export the returned token:
+
+```bash
+go run ./secrets/cmd/secrets login-vault \
+  -vault-username trader \
+  -vault-password '...' \
+  -vault-mfa 'totp-method-id-or-name:123456' \
+  -reveal
+```
+
+Vault's built-in Login MFA works on auth-method login. It does not wrap the
+token auth method itself, so this mode exists alongside the old token-based
+mode rather than replacing it.
+
 This reads:
 
 ```text
