@@ -1,0 +1,157 @@
+upstream:
+  repo: https://github.com/hyperliquid-dex/hyperliquid-python-sdk
+  local_path: hyperliquid-python-sdk
+  version: 0.23.0
+  commit: 7ee976d123b1e04295e4a1e37a424ca6a13bef88
+
+rules:
+  - sdk mirrors Python SDK structure
+  - do not add sdkx facade
+  - preserve Python names where reasonable
+  - preserve action payload JSON/msgpack format exactly
+  - every exported Go function should reference upstream Python source
+  - signing changes require golden tests
+
+mappings:
+  - python: hyperliquid/api.py::API
+    go: sdk/api/api.go::API
+    status: scaffolded
+
+  - python: hyperliquid/api.py::API.post
+    go: sdk/api/api.go::API.Post
+    status: ported
+    notes: Go adds context.Context.
+
+  - python: hyperliquid/info.py::Info
+    go: sdk/info/info.go::Info
+    status: scaffolded
+
+  - python: hyperliquid/exchange.py::Exchange
+    go: sdk/exchange/exchange.go::Exchange
+    status: partially_ported
+
+  - python: hyperliquid/exchange.py::Exchange.order
+    go: sdk/exchange/exchange.go::Exchange.Order
+    status: ported
+
+  - python: hyperliquid/exchange.py::Exchange.bulk_orders
+    go: sdk/exchange/exchange.go::Exchange.BulkOrders
+    status: ported
+    notes: Relies on sdk/signing.OrderedMap for wire-compatible signed payloads.
+
+  - python: hyperliquid/exchange.py::Exchange.cancel
+    go: sdk/exchange/exchange.go::Exchange.Cancel
+    status: ported
+
+  - python: hyperliquid/exchange.py::Exchange.bulk_cancel
+    go: sdk/exchange/exchange.go::Exchange.BulkCancel
+    status: ported
+
+  - python: hyperliquid/exchange.py::Exchange.schedule_cancel
+    go: sdk/exchange/exchange.go::Exchange.ScheduleCancel
+    status: ported
+
+  - python: hyperliquid/utils/signing.py
+    go: sdk/signing/signing.go
+    status: partially_ported
+    critical: true
+
+  - python: hyperliquid/utils/signing.py::float_to_wire
+    go: sdk/signing/signing.go::FloatToWire
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestOrderWireWithCloidMatchesPythonShape
+
+  - python: hyperliquid/utils/signing.py::action_hash
+    go: sdk/signing/signing.go::ActionHash
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestPhantomAgentCreationMatchesPython
+
+  - python: hyperliquid/utils/signing.py::sign_l1_action
+    go: sdk/signing/signing.go::SignL1Action
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestL1ActionSigningMatchesPython
+      - sdk/signing/signing_test.go::TestL1ActionSigningOrderMatchesPython
+      - sdk/signing/signing_test.go::TestL1ActionSigningOrderWithCloidMatchesPython
+      - sdk/signing/signing_test.go::TestL1ActionSigningMatchesWithVaultPython
+      - sdk/signing/signing_test.go::TestL1ActionSigningTPSLOrderMatchesPython
+
+  - python: hyperliquid/utils/signing.py::sign_user_signed_action
+    go: sdk/signing/signing.go::SignUserSignedAction
+    status: ported
+    critical: true
+
+  - python: hyperliquid/utils/signing.py::sign_usd_transfer_action
+    go: sdk/signing/signing.go::SignUSDTransferAction
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestSignUSDTransferActionMatchesPython
+
+  - python: hyperliquid/utils/signing.py::sign_withdraw_from_bridge_action
+    go: sdk/signing/signing.go::SignWithdrawFromBridgeAction
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestSignWithdrawFromBridgeActionMatchesPython
+
+  - python: hyperliquid/utils/signing.py::construct_phantom_agent
+    go: sdk/signing/signing.go::ConstructPhantomAgent
+    status: ported
+    critical: true
+    tests:
+      - sdk/signing/signing_test.go::TestPhantomAgentCreationMatchesPython
+
+  - python: hyperliquid/utils/signing.py::order_request_to_order_wire
+    go: sdk/signing/signing.go::OrderRequestToOrderWire
+    status: ported
+    critical: true
+    notes: Uses OrderedMap to preserve Python dict insertion order for msgpack hashing.
+    tests:
+      - sdk/signing/signing_test.go::TestPhantomAgentCreationMatchesPython
+      - sdk/signing/signing_test.go::TestOrderWireWithCloidMatchesPythonShape
+
+  - python: hyperliquid/utils/signing.py::order_wires_to_order_action
+    go: sdk/signing/signing.go::OrderWiresToOrderAction
+    status: ported
+    critical: true
+    notes: Uses OrderedMap to preserve Python dict insertion order for msgpack hashing.
+    tests:
+      - sdk/signing/signing_test.go::TestPhantomAgentCreationMatchesPython
+
+  - python: hyperliquid/utils/types.py
+    go: sdk/types/types.go
+    status: partially_ported
+
+  - python: hyperliquid/utils/types.py::Cloid
+    go: sdk/types/types.go::Cloid
+    status: ported
+    tests:
+      - sdk/types/types_test.go::TestCloidFromIntMatchesPython
+      - sdk/types/types_test.go::TestNewCloidValidationMatchesPython
+
+  - python: hyperliquid/utils/constants.py
+    go: sdk/constants/constants.go
+    status: ported
+
+  - python: hyperliquid/websocket_manager.py
+    go: sdk/websocket/websocket_manager.go
+    status: partially_ported
+
+  - python: hyperliquid/websocket_manager.py::subscription_to_identifier
+    go: sdk/websocket/websocket_manager.go::SubscriptionToIdentifier
+    status: ported
+
+  - python: hyperliquid/websocket_manager.py::ws_msg_to_identifier
+    go: sdk/websocket/websocket_manager.go::WsMsgToIdentifier
+    status: ported
+
+  - python: hyperliquid/websocket_manager.py::WebsocketManager
+    go: sdk/websocket/websocket_manager.go::WebsocketManager
+    status: partially_ported
+    notes: Go implementation uses context and goroutines; behavior mirrors connect/ping/dispatch/subscribe/unsubscribe.

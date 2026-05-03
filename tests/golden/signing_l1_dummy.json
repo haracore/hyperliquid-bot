@@ -1,0 +1,21 @@
+{
+  "source": "hyperliquid-python-sdk/tests/signing_test.py::test_l1_action_signing_matches",
+  "privateKey": "0x0123456789012345678901234567890123456789012345678901234567890123",
+  "action": {
+    "type": "dummy",
+    "num": 100000000000
+  },
+  "nonce": 0,
+  "vaultAddress": null,
+  "expiresAfter": null,
+  "mainnet": {
+    "r": "0x53749d5b30552aeb2fca34b530185976545bb22d0b3ce6f62e31be961a59298",
+    "s": "0x755c40ba9bf05223521753995abb2f73ab3229be8ec921f350cb447e384d8ed8",
+    "v": 27
+  },
+  "testnet": {
+    "r": "0x542af61ef1f429707e3c76c5293c80d01f74ef853e34b76efffcb57e574f9510",
+    "s": "0x17b8b32f086e8cdede991f1e2c529f5dd5297cbe8128500e00cbaf766204a613",
+    "v": 28
+  }
+}
