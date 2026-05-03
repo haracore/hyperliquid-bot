@@ -112,6 +112,6 @@ Run against Hyperliquid testnet with a test wallet:
 - [ ] Add testnet integration tests for order lifecycle.
 - [ ] Add websocket reconnect/resubscribe behavior if the bot depends on streams.
 - [ ] Review all optional fields for Python parity.
-- [ ] Pin the upstream Python SDK commit in `portmap.yaml`.
+- [ ] Pin the upstream Python SDK commit in `sdk/portmap.yaml`.
 - [ ] Document the process for updating Go after upstream Python changes.
 - [ ] Run tests with race detector: `go test -race ./...`.

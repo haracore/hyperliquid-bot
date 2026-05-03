@@ -30,7 +30,7 @@ Verified so far:
 Remaining verification work:
 
 - Many exchange action methods compile and mirror payload construction, but only signing-layer golden tests currently prove byte-level compatibility.
-- Future upstream Python SDK updates should be ported by diffing `hyperliquid-python-sdk/hyperliquid` and updating `portmap.yaml`.
+- Future upstream Python SDK updates should be ported by diffing `hyperliquid-python-sdk/hyperliquid` and updating `sdk/portmap.yaml`.
 
 Run:
 

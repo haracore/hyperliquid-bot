@@ -1,6 +1,6 @@
 upstream:
   repo: https://github.com/hyperliquid-dex/hyperliquid-python-sdk
-  local_path: hyperliquid-python-sdk
+  local_path: ../hyperliquid-python-sdk
   version: 0.23.0
   commit: 7ee976d123b1e04295e4a1e37a424ca6a13bef88
 
