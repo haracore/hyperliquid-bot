@@ -14,7 +14,7 @@ import (
 
 func main() {
 	var (
-		privateKey   = flag.String("private-key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"), "private key; can also be set with HYPERLIQUID_PRIVATE_KEY")
+		privateKey   = flag.String("private-key", "", "private key; overrides execution secrets")
 		baseURL      = flag.String("base-url", os.Getenv("HYPERLIQUID_BASE_URL"), "Hyperliquid API base URL")
 		testnet      = flag.Bool("testnet", false, "use Hyperliquid testnet")
 		coin         = flag.String("coin", "", "perp coin, for example BTC or ETH")
@@ -24,14 +24,16 @@ func main() {
 		price        = flag.Float64("price", 0, "limit price")
 		tif          = flag.String("tif", "Gtc", "time in force: Gtc, Ioc, or Alo")
 		reduceOnly   = flag.Bool("reduce-only", false, "place reduce-only order")
-		vaultAddress = flag.String("vault-address", os.Getenv("HYPERLIQUID_VAULT_ADDRESS"), "optional vault/subaccount address")
+		vaultAddress = flag.String("vault-address", "", "optional vault/subaccount address; overrides execution secrets")
 		cloidRaw     = flag.String("cloid", "", "optional client order id, 16-byte hex string")
 		confirm      = flag.Bool("confirm", false, "actually submit the order")
 		timeout      = flag.Duration("timeout", 20*time.Second, "HTTP timeout")
 	)
+	secretFlags := clientutil.AddSecretFlags()
 	flag.Parse()
 
-	clientutil.RequirePrivateKey(*privateKey)
+	account := clientutil.ResolveAccount(context.Background(), secretFlags, *privateKey, "", *vaultAddress, *timeout)
+	clientutil.RequirePrivateKey(account.PrivateKey)
 	clientutil.RequireCoin(*coin)
 	if *size <= 0 {
 		clientutil.ExitUsage("-size must be greater than 0")
@@ -68,9 +70,9 @@ func main() {
 	client := execution.New(execution.Config{
 		BaseURL:      base,
 		Timeout:      *timeout,
-		PrivateKey:   *privateKey,
+		PrivateKey:   account.PrivateKey,
 		Dex:          *dex,
-		VaultAddress: clientutil.OptionalString(vaultAddress),
+		VaultAddress: clientutil.OptionalString(&account.VaultAddress),
 	})
 	response, err := client.PlacePerpOrder(ctx, execution.OrderRequest{
 		Coin:       *coin,

@@ -13,7 +13,7 @@ import (
 
 func main() {
 	var (
-		privateKey   = flag.String("private-key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"), "private key; can also be set with HYPERLIQUID_PRIVATE_KEY")
+		privateKey   = flag.String("private-key", "", "private key; overrides execution secrets")
 		baseURL      = flag.String("base-url", os.Getenv("HYPERLIQUID_BASE_URL"), "Hyperliquid API base URL")
 		testnet      = flag.Bool("testnet", false, "use Hyperliquid testnet")
 		coin         = flag.String("coin", "", "perp coin")
@@ -26,12 +26,14 @@ func main() {
 		tif          = flag.String("tif", "Gtc", "time in force: Gtc, Ioc, or Alo")
 		reduceOnly   = flag.Bool("reduce-only", false, "new reduce-only value")
 		newCloidRaw  = flag.String("new-cloid", "", "optional new client order id, 16-byte hex string")
-		vaultAddress = flag.String("vault-address", os.Getenv("HYPERLIQUID_VAULT_ADDRESS"), "optional vault/subaccount address")
+		vaultAddress = flag.String("vault-address", "", "optional vault/subaccount address; overrides execution secrets")
 		confirm      = flag.Bool("confirm", false, "actually modify the order")
 		timeout      = flag.Duration("timeout", 20*time.Second, "HTTP timeout")
 	)
+	secretFlags := clientutil.AddSecretFlags()
 	flag.Parse()
-	runModify(*privateKey, *baseURL, *testnet, *coin, *dex, *oid, *oidCloidRaw, *side, *size, *price, *tif, *reduceOnly, *newCloidRaw, clientutil.OptionalString(vaultAddress), *confirm, *timeout)
+	account := clientutil.ResolveAccount(context.Background(), secretFlags, *privateKey, "", *vaultAddress, *timeout)
+	runModify(account.PrivateKey, *baseURL, *testnet, *coin, *dex, *oid, *oidCloidRaw, *side, *size, *price, *tif, *reduceOnly, *newCloidRaw, clientutil.OptionalString(&account.VaultAddress), *confirm, *timeout)
 }
 
 func runModify(privateKey string, baseURL string, testnet bool, coin string, dex string, oid int, oidCloidRaw string, side string, size float64, price float64, tif string, reduceOnly bool, newCloidRaw string, vault *string, confirm bool, timeout time.Duration) {

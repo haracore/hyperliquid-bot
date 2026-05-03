@@ -14,7 +14,7 @@ import (
 
 func main() {
 	var (
-		privateKey = flag.String("private-key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"), "private key; can also be set with HYPERLIQUID_PRIVATE_KEY")
+		privateKey = flag.String("private-key", "", "private key; overrides execution secrets")
 		baseURL    = flag.String("base-url", os.Getenv("HYPERLIQUID_BASE_URL"), "Hyperliquid API base URL")
 		testnet    = flag.Bool("testnet", false, "use Hyperliquid testnet")
 		coin       = flag.String("coin", "", "spot pair, for example PURR/USDC, or indexed spot asset like @8")
@@ -26,9 +26,11 @@ func main() {
 		confirm    = flag.Bool("confirm", false, "actually submit the order")
 		timeout    = flag.Duration("timeout", 20*time.Second, "HTTP timeout")
 	)
+	secretFlags := clientutil.AddSecretFlags()
 	flag.Parse()
 
-	clientutil.RequirePrivateKey(*privateKey)
+	account := clientutil.ResolveAccount(context.Background(), secretFlags, *privateKey, "", "", *timeout)
+	clientutil.RequirePrivateKey(account.PrivateKey)
 	clientutil.RequireCoin(*coin)
 	if *size <= 0 {
 		clientutil.ExitUsage("-size must be greater than 0")
@@ -62,7 +64,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	client := execution.New(execution.Config{BaseURL: base, Timeout: *timeout, PrivateKey: *privateKey})
+	client := execution.New(execution.Config{BaseURL: base, Timeout: *timeout, PrivateKey: account.PrivateKey})
 	response, err := client.PlaceSpotOrder(ctx, execution.OrderRequest{
 		Coin:  *coin,
 		IsBuy: isBuy,

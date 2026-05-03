@@ -13,18 +13,20 @@ import (
 
 func main() {
 	var (
-		privateKey   = flag.String("private-key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"), "private key; can also be set with HYPERLIQUID_PRIVATE_KEY")
+		privateKey   = flag.String("private-key", "", "private key; overrides execution secrets")
 		baseURL      = flag.String("base-url", os.Getenv("HYPERLIQUID_BASE_URL"), "Hyperliquid API base URL")
 		testnet      = flag.Bool("testnet", false, "use Hyperliquid testnet")
 		coin         = flag.String("coin", "", "perp coin")
 		dex          = flag.String("dex", "", "perp dex name; empty string is the default perp dex")
 		oid          = flag.Int("oid", 0, "order id to cancel")
-		vaultAddress = flag.String("vault-address", os.Getenv("HYPERLIQUID_VAULT_ADDRESS"), "optional vault/subaccount address")
+		vaultAddress = flag.String("vault-address", "", "optional vault/subaccount address; overrides execution secrets")
 		confirm      = flag.Bool("confirm", false, "actually cancel the order")
 		timeout      = flag.Duration("timeout", 20*time.Second, "HTTP timeout")
 	)
+	secretFlags := clientutil.AddSecretFlags()
 	flag.Parse()
-	clientutil.RequirePrivateKey(*privateKey)
+	account := clientutil.ResolveAccount(context.Background(), secretFlags, *privateKey, "", *vaultAddress, *timeout)
+	clientutil.RequirePrivateKey(account.PrivateKey)
 	clientutil.RequireCoin(*coin)
 	if *oid == 0 {
 		clientutil.ExitUsage("missing -oid")
@@ -39,9 +41,9 @@ func main() {
 	client := execution.New(execution.Config{
 		BaseURL:      base,
 		Timeout:      *timeout,
-		PrivateKey:   *privateKey,
+		PrivateKey:   account.PrivateKey,
 		Dex:          *dex,
-		VaultAddress: clientutil.OptionalString(vaultAddress),
+		VaultAddress: clientutil.OptionalString(&account.VaultAddress),
 	})
 	response, err := client.CancelPerpOrder(ctx, execution.CancelOrderRequest{Coin: *coin, Oid: *oid})
 	if err != nil {

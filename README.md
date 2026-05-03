@@ -9,6 +9,7 @@ This repository is split into explicit layers so different agents can work witho
 ├── hyperliquid-python-sdk/   # Official upstream Python SDK submodule
 ├── sdk/                      # Traceable Go port of the Python SDK
 ├── execution/                # Bot/client execution layer built on top of sdk
+├── secrets/                  # Secret provider interface and implementations
 └── ui/                       # Browser UI built on top of execution
 ```
 
@@ -16,6 +17,7 @@ This repository is split into explicit layers so different agents can work witho
 
 - `sdk/` is the SDK layer. It mirrors the official Python SDK and should stay easy to diff against upstream.
 - `execution/` is the execution layer. It contains runnable commands and bot-facing workflows.
+- `secrets/` is the provider interface layer for account secrets. It must not import `sdk/`, `execution/`, or `ui/`.
 - `ui/` is the browser UI layer. It depends on `execution/client` and must not import `sdk/` directly.
 - `hyperliquid-python-sdk/` is a git submodule and should be treated as read-only upstream reference.
 
@@ -27,6 +29,7 @@ This repository is split into explicit layers so different agents can work witho
 - [sdk/OPEN_QUESTIONS.md](sdk/OPEN_QUESTIONS.md): production-readiness risks and remaining verification work.
 - [sdk/portmap.yaml](sdk/portmap.yaml): machine-readable mapping from Python SDK symbols to Go SDK symbols.
 - [execution/README.md](execution/README.md): execution-layer commands and usage.
+- [secrets/README.md](secrets/README.md): secret provider interface, env provider, and Vault provider.
 - [ui/README.md](ui/README.md): UI-layer server, structure, and usage.
 
 ## Commands
