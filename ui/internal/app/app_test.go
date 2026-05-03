@@ -8,7 +8,7 @@ import (
 )
 
 func TestGetPagesRender(t *testing.T) {
-	ui := New(Config{DefaultAddress: "0xabc"})
+	ui := New(Config{AddressOverride: "0xabc"})
 	server := httptest.NewServer(ui.Routes())
 	defer server.Close()
 
@@ -27,6 +27,7 @@ func TestGetPagesRender(t *testing.T) {
 }
 
 func TestWriteActionRequiresPrivateKey(t *testing.T) {
+	t.Setenv("HYPERLIQUID_PRIVATE_KEY", "")
 	ui := New(Config{})
 	req := httptest.NewRequest(http.MethodPost, "/spot/orders", strings.NewReader("action=cancel-oid&coin=PURR%2FUSDC&oid=123&confirm=on"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -37,7 +38,7 @@ func TestWriteActionRequiresPrivateKey(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "private key is not configured") {
+	if !strings.Contains(rec.Body.String(), "private_key") {
 		t.Fatalf("expected private key error, got body: %s", rec.Body.String())
 	}
 }

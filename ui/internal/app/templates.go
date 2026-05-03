@@ -14,7 +14,7 @@ const pageTemplate = `
   <header class="topbar">
     <div>
       <div class="brand">Hyperliquid UI</div>
-      <div class="meta">{{.BaseURL}}{{if .Testnet}} · testnet{{end}}{{if .PrivateKeySet}} · trading enabled{{else}} · read-only{{end}}</div>
+      <div class="meta">{{.BaseURL}}{{if .Testnet}} · testnet{{end}} · {{.SecretProvider}}/{{.Account}}</div>
     </div>
     <nav>
       <a class="{{if eq .Active "balances"}}active{{end}}" href="/balances">Balances</a>

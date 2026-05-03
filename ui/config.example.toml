@@ -1,0 +1,48 @@
+[server]
+listen = ":8080"
+
+[hyperliquid]
+base_url = "https://api.hyperliquid.xyz"
+testnet = false
+timeout = "20s"
+
+[secrets]
+provider = "env"
+account = "main"
+prefix = "accounts"
+
+[secrets.env]
+# execution/credentials env provider reads fixed env vars:
+# HYPERLIQUID_ADDRESS
+# HYPERLIQUID_PRIVATE_KEY
+# HYPERLIQUID_VAULT_ADDRESS
+
+[secrets.vault]
+addr = "http://127.0.0.1:8200"
+token = ""
+token_env = "VAULT_TOKEN"
+namespace = ""
+mount = "secret"
+prefix = "hyperliquid"
+
+[secrets.vault_userpass]
+addr = "http://127.0.0.1:8200"
+username = ""
+username_env = "VAULT_USERNAME"
+password = ""
+password_env = "VAULT_PASSWORD"
+mfa = ""
+mfa_env = "VAULT_MFA"
+mfa_method = ""
+mfa_method_env = "VAULT_MFA_METHOD"
+otp = ""
+otp_env = "VAULT_OTP"
+namespace = ""
+auth_mount = "userpass"
+mount = "secret"
+prefix = "hyperliquid"
+
+[overrides]
+address = ""
+private_key = ""
+vault_address = ""

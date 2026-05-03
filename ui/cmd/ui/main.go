@@ -5,36 +5,39 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
-	"time"
 
 	"hyperliquid-bot/ui/internal/app"
+	uiconfig "hyperliquid-bot/ui/internal/config"
 )
 
 func main() {
 	var (
-		listen     = flag.String("listen", ":8080", "HTTP listen address")
-		address    = flag.String("address", os.Getenv("HYPERLIQUID_ADDRESS"), "default Hyperliquid address")
-		privateKey = flag.String("private-key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"), "private key for state-changing actions")
-		vault      = flag.String("vault-address", os.Getenv("HYPERLIQUID_VAULT_ADDRESS"), "optional vault/subaccount address")
-		baseURL    = flag.String("base-url", os.Getenv("HYPERLIQUID_BASE_URL"), "Hyperliquid API base URL")
-		testnet    = flag.Bool("testnet", false, "use Hyperliquid testnet")
-		timeout    = flag.Duration("timeout", 20*time.Second, "Hyperliquid request timeout")
+		configPath     = flag.String("config", "", "TOML config path")
+		listenOverride = flag.String("listen", "", "HTTP listen address override")
 	)
 	flag.Parse()
 
+	cfg, err := uiconfig.Load(*configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if strings.TrimSpace(*listenOverride) != "" {
+		cfg.Server.Listen = *listenOverride
+	}
+
 	ui := app.New(app.Config{
-		DefaultAddress: *address,
-		PrivateKey:     *privateKey,
-		VaultAddress:   *vault,
-		BaseURL:        *baseURL,
-		Testnet:        *testnet,
-		Timeout:        *timeout,
+		Credentials:          cfg.ProviderConfig(),
+		AddressOverride:      cfg.Overrides.Address,
+		PrivateKeyOverride:   cfg.Overrides.PrivateKey,
+		VaultAddressOverride: cfg.Overrides.VaultAddress,
+		BaseURL:              cfg.Hyperliquid.BaseURL,
+		Testnet:              cfg.Hyperliquid.Testnet,
+		Timeout:              cfg.Hyperliquid.Timeout,
 	})
 
-	fmt.Printf("UI listening on %s\n", displayURL(*listen))
-	log.Fatal(http.ListenAndServe(*listen, ui.Routes()))
+	fmt.Printf("UI listening on %s\n", displayURL(cfg.Server.Listen))
+	log.Fatal(http.ListenAndServe(cfg.Server.Listen, ui.Routes()))
 }
 
 func displayURL(listen string) string {

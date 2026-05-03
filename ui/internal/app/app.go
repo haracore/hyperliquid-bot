@@ -13,6 +13,7 @@ import (
 	"time"
 
 	execution "hyperliquid-bot/execution/client"
+	"hyperliquid-bot/execution/credentials"
 )
 
 const (
@@ -21,12 +22,13 @@ const (
 )
 
 type Config struct {
-	DefaultAddress string
-	PrivateKey     string
-	VaultAddress   string
-	BaseURL        string
-	Testnet        bool
-	Timeout        time.Duration
+	Credentials          credentials.ProviderConfig
+	AddressOverride      string
+	PrivateKeyOverride   string
+	VaultAddressOverride string
+	BaseURL              string
+	Testnet              bool
+	Timeout              time.Duration
 }
 
 type App struct {
@@ -37,6 +39,15 @@ type App struct {
 func New(config Config) *App {
 	if config.Timeout == 0 {
 		config.Timeout = 20 * time.Second
+	}
+	if strings.TrimSpace(config.Credentials.Name) == "" {
+		config.Credentials.Name = credentials.ProviderEnv
+	}
+	if strings.TrimSpace(config.Credentials.Account) == "" {
+		config.Credentials.Account = "main"
+	}
+	if strings.TrimSpace(config.Credentials.Prefix) == "" {
+		config.Credentials.Prefix = "accounts"
 	}
 	config.BaseURL = resolveBaseURL(config.BaseURL, config.Testnet)
 	return &App{
@@ -62,7 +73,8 @@ type pageData struct {
 	DefaultAddress string
 	BaseURL        string
 	Testnet        bool
-	PrivateKeySet  bool
+	SecretProvider string
+	Account        string
 	Error          string
 	ResultJSON     string
 	Balances       *balancesView
@@ -110,13 +122,22 @@ func (a *App) balances(w http.ResponseWriter, r *http.Request) {
 		}
 		address := strings.TrimSpace(r.FormValue("address"))
 		if address == "" {
+			account, err := a.resolveAccountFields(r.Context(), "", "", "")
+			if err != nil {
+				data.Error = err.Error()
+				a.render(w, data)
+				return
+			}
+			address = account.Address
+		}
+		if address == "" {
 			data.Error = "address is required"
 			a.render(w, data)
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), a.config.Timeout)
 		defer cancel()
-		client := a.newExecutionClient("")
+		client := a.newReadClient("")
 		result, err := client.Balances(ctx, address)
 		if err != nil {
 			data.Error = err.Error()
@@ -142,13 +163,22 @@ func (a *App) positions(w http.ResponseWriter, r *http.Request) {
 		dex := strings.TrimSpace(r.FormValue("dex"))
 		showAll := r.FormValue("all") == "on"
 		if address == "" {
+			account, err := a.resolveAccountFields(r.Context(), "", "", "")
+			if err != nil {
+				data.Error = err.Error()
+				a.render(w, data)
+				return
+			}
+			address = account.Address
+		}
+		if address == "" {
 			data.Error = "address is required"
 			a.render(w, data)
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), a.config.Timeout)
 		defer cancel()
-		client := a.newExecutionClient(dex)
+		client := a.newReadClient(dex)
 		positions, err := client.PerpPositions(ctx, address, showAll)
 		if err != nil {
 			data.Error = err.Error()
@@ -199,14 +229,21 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 	dex := strings.TrimSpace(r.FormValue("dex"))
 	ctx, cancel := context.WithTimeout(r.Context(), a.config.Timeout)
 	defer cancel()
-	client := a.newExecutionClient(dex)
 
 	switch action {
 	case "open-orders":
 		address := strings.TrimSpace(r.FormValue("address"))
 		if address == "" {
+			account, err := a.resolveAccountFields(ctx, "", "", "")
+			if err != nil {
+				return nil, err
+			}
+			address = account.Address
+		}
+		if address == "" {
 			return nil, fmt.Errorf("address is required")
 		}
+		client := a.newReadClient(dex)
 		if kind == "perp" {
 			return client.PerpOpenOrders(ctx, address)
 		}
@@ -215,6 +252,11 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 		if err := a.requireWrite(r); err != nil {
 			return nil, err
 		}
+		account, err := a.resolveAccount(ctx, "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		client := a.newWriteClient(dex, account)
 		request, err := parseOrderRequest(r, kind == "perp")
 		if err != nil {
 			return nil, err
@@ -227,6 +269,11 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 		if err := a.requireWrite(r); err != nil {
 			return nil, err
 		}
+		account, err := a.resolveAccount(ctx, "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		client := a.newWriteClient(dex, account)
 		request, err := parseCancelOrderRequest(r)
 		if err != nil {
 			return nil, err
@@ -239,6 +286,11 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 		if err := a.requireWrite(r); err != nil {
 			return nil, err
 		}
+		account, err := a.resolveAccount(ctx, "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		client := a.newWriteClient(dex, account)
 		request, err := parseCancelByCloidRequest(r)
 		if err != nil {
 			return nil, err
@@ -251,6 +303,11 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 		if err := a.requireWrite(r); err != nil {
 			return nil, err
 		}
+		account, err := a.resolveAccount(ctx, "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		client := a.newWriteClient(dex, account)
 		request, err := parseModifyOrderRequest(r, kind == "perp")
 		if err != nil {
 			return nil, err
@@ -265,37 +322,72 @@ func (a *App) handleOrderAction(r *http.Request, kind string) (any, error) {
 }
 
 func (a *App) requireWrite(r *http.Request) error {
-	if strings.TrimSpace(a.config.PrivateKey) == "" {
-		return fmt.Errorf("private key is not configured")
-	}
 	if r.FormValue("confirm") != "on" {
 		return fmt.Errorf("confirmation checkbox is required")
 	}
 	return nil
 }
 
-func (a *App) newExecutionClient(dex string) *execution.Client {
+func (a *App) newReadClient(dex string) *execution.Client {
+	return execution.New(execution.Config{
+		BaseURL: a.config.BaseURL,
+		Timeout: a.config.Timeout,
+		Dex:     dex,
+	})
+}
+
+func (a *App) newWriteClient(dex string, account credentials.Account) *execution.Client {
 	var vault *string
-	if strings.TrimSpace(a.config.VaultAddress) != "" {
-		vault = &a.config.VaultAddress
+	if strings.TrimSpace(account.VaultAddress) != "" {
+		vault = &account.VaultAddress
 	}
 	return execution.New(execution.Config{
 		BaseURL:      a.config.BaseURL,
 		Timeout:      a.config.Timeout,
-		PrivateKey:   a.config.PrivateKey,
+		PrivateKey:   account.PrivateKey,
 		Dex:          dex,
 		VaultAddress: vault,
 	})
+}
+
+func (a *App) resolveAccount(ctx context.Context, privateKeyOverride string, addressOverride string, vaultOverride string) (credentials.Account, error) {
+	resolveCtx, cancel := context.WithTimeout(ctx, a.config.Timeout)
+	defer cancel()
+
+	account, err := credentials.ResolveAccount(resolveCtx, a.config.Credentials)
+	if err != nil {
+		return credentials.Account{}, fmt.Errorf("resolve execution secrets: %w", err)
+	}
+	account = credentials.ApplyOverrides(account, a.config.PrivateKeyOverride, a.config.AddressOverride, a.config.VaultAddressOverride)
+	account = credentials.ApplyOverrides(account, privateKeyOverride, addressOverride, vaultOverride)
+	if strings.TrimSpace(account.PrivateKey) == "" {
+		return credentials.Account{}, fmt.Errorf("private key is not configured")
+	}
+	return account, nil
+}
+
+func (a *App) resolveAccountFields(ctx context.Context, privateKeyOverride string, addressOverride string, vaultOverride string) (credentials.Account, error) {
+	resolveCtx, cancel := context.WithTimeout(ctx, a.config.Timeout)
+	defer cancel()
+
+	account, err := credentials.ResolveAccountFields(resolveCtx, a.config.Credentials)
+	if err != nil {
+		return credentials.Account{}, fmt.Errorf("resolve execution secrets: %w", err)
+	}
+	account = credentials.ApplyOverrides(account, a.config.PrivateKeyOverride, a.config.AddressOverride, a.config.VaultAddressOverride)
+	account = credentials.ApplyOverrides(account, privateKeyOverride, addressOverride, vaultOverride)
+	return account, nil
 }
 
 func (a *App) basePage(title string, active string) pageData {
 	return pageData{
 		Title:          title,
 		Active:         active,
-		DefaultAddress: a.config.DefaultAddress,
+		DefaultAddress: a.config.AddressOverride,
 		BaseURL:        a.config.BaseURL,
 		Testnet:        a.config.Testnet,
-		PrivateKeySet:  strings.TrimSpace(a.config.PrivateKey) != "",
+		SecretProvider: a.config.Credentials.Name,
+		Account:        a.config.Credentials.Account,
 	}
 }
 
